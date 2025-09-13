@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planificateur de Course Trail (Version Fiable et Complète)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .info-icon {
+            cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+            width: 1.25rem; height: 1.25rem; border-radius: 50%;
+            background-color: #e0e7ff; color: #3b82f6; font-weight: bold; font-size: 0.8rem; margin-left: 0.5rem;
+        }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center;
+            z-index: 1000; transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            background: white; padding: 2rem; border-radius: 0.75rem; max-width: 90%;
+            width: 500px; max-height: 90vh; overflow-y: auto;
+            transform: scale(0.95); transition: transform 0.3s ease;
+        }
+        .modal-overlay:not(.hidden) .modal-content { transform: scale(1); }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <template id="reference-template">
+        <div class="reference-item p-4 border rounded-lg bg-gray-50/50 relative">
+            <button type="button" class="remove-reference-btn absolute top-1 right-2 text-xl text-gray-400 hover:text-red-500 font-bold">&times;</button>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+                <div><label class="block text-xs font-medium text-gray-600">Distance (km)</label><input type="number" value="10" class="refDistance mt-1 block w-full bg-white border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"></div>
+                <div><label class="block text-xs font-medium text-gray-600">Temps (hh:mm:ss)</label><input type="text" value="00:50:00" placeholder="hh:mm:ss" class="refTime mt-1 block w-full bg-white border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"></div>
+                <div><label class="block text-xs font-medium text-gray-600">D+ (m)</label><input type="number" value="0" class="refElevGain mt-1 block w-full bg-white border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"></div>
+                <div><label class="block text-xs font-medium text-gray-600">D- (m)</label><input type="number" value="0" class="refElevLoss mt-1 block w-full bg-white border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"></div>
+                <div class="col-span-2"><label class="block text-xs font-medium text-gray-600">Technicité (<span class="tech-value">3</span>/5)</label><input type="range" min="1" max="5" value="3" step="0.5" class="refTech w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"></div>
+            </div>
+        </div>
+    </template>
+    <template id="aid-station-template">
+        <li class="aid-station-item flex items-center justify-between p-2 bg-gray-50 rounded-md">
+            <div class="flex items-center">
+                <span class="font-bold text-blue-600 mr-2">📍</span>
+                <input type="text" class="station-name bg-transparent text-sm p-1 rounded-md focus:ring-1 focus:ring-blue-500 focus:bg-white" placeholder="Nom du point">
+            </div>
+            <div class="flex items-center">
+                <span class="station-distance text-sm text-gray-600 mr-3"></span>
+                <button type="button" class="remove-station-btn text-red-400 hover:text-red-600 font-bold">&times;</button>
+            </div>
+        </li>
+    </template>
+
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Planificateur de Course Trail Expert</h1>
+            <p class="text-gray-600 mt-2">Estimez votre temps, vos besoins en nutrition et hydratation avec des guides interactifs.</p>
+        </header>
+        <div class="bg-white p-6 rounded-2xl shadow-lg mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="space-y-6">
+                    <h2 class="text-xl font-semibold border-b pb-2">1. Paramètres Athlète</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label for="weight" class="block text-sm font-medium text-gray-700">Votre Poids (kg)</label><input type="number" id="weight" value="70" class="mt-1 block w-full bg-gray-50 border border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"></div>
+                        <div><label for="gender" class="block text-sm font-medium text-gray-700">Sexe</label><select id="gender" class="mt-1 block w-full bg-gray-50 border border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"><option value="homme" selected>Homme</option><option value="femme">Femme</option></select></div>
+                    </div>
+                    <h3 class="text-lg font-medium pt-2">Performances de Référence</h3>
+                    <div id="reference-list" class="space-y-4"></div>
+                    <button id="addReferenceBtn" type="button" class="w-full text-sm text-blue-600 hover:text-blue-800 font-medium py-2 border-2 border-dashed border-blue-300 rounded-lg hover:bg-blue-50 transition-colors duration-200">+ Ajouter une autre référence</button>
+                </div>
+                <div class="space-y-6 bg-gray-50 p-6 rounded-2xl border">
+                    <h2 class="text-xl font-semibold border-b pb-2">2. Paramètres Course & Environnement</h2>
+                    <div><label for="gpxFile" class="block text-sm font-medium text-gray-700">Charger un Fichier GPX</label><input type="file" id="gpxFile" accept=".gpx" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"></div>
+                    <div id="splitDistanceContainer"><label for="splitDistance" class="block text-sm font-medium text-gray-700">Diviser les segments tous les (km)</label><input type="number" id="splitDistance" value="5" class="mt-1 block w-full bg-white border border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"></div>
+                    <div>
+                        <label for="techTarget" class="flex items-center text-sm font-medium text-gray-700">Technicité cible (<span id="tech-target-value">3</span>/5) <span class="info-icon" data-modal="modal-tech">?</span></label>
+                        <input type="range" id="techTarget" min="1" max="5" value="3" step="0.5" class="mt-1 w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    <div>
+                        <label for="fatigueFactor" class="flex items-center text-sm font-medium text-gray-700">Facteur de Fatigue (%)<span class="info-icon" data-modal="modal-fatigue">?</span></label>
+                        <input type="number" id="fatigueFactor" value="15" step="1" class="mt-1 block w-full bg-white border border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                         <label for="carbIntake" class="flex items-center text-sm font-medium text-gray-700">Objectif Glucides (g/h)<span class="info-icon" data-modal="modal-carbs">?</span></label>
+                        <input type="number" id="carbIntake" value="60" step="5" class="mt-1 block w-full bg-white border border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                     <div>
+                        <label for="temperature" class="flex items-center text-sm font-medium text-gray-700">Température extérieure (°C)<span class="info-icon" data-modal="modal-hydration">?</span></label>
+                        <input type="number" id="temperature" value="15" step="1" class="mt-1 block w-full bg-white border border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="map-section" class="bg-white p-6 rounded-2xl shadow-lg mb-8 hidden">
+            <h2 class="text-xl font-semibold border-b pb-2 mb-4">3. Parcours & Ravitaillements</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-2 relative">
+                    <div id="map" class="h-96 w-full rounded-lg shadow-md bg-gray-200"></div>
+                    <div id="map-message" class="leaflet-map-message hidden"></div>
+                </div>
+                <div class="space-y-3">
+                    <h3 class="font-medium">Points de Ravitaillement</h3>
+                    <p class="text-xs text-gray-500">Cliquez sur le parcours pour ajouter un point. Ils serviront à découper la course.</p>
+                    <ul id="aid-stations-list" class="space-y-2 max-h-80 overflow-y-auto pr-2"></ul>
+                </div>
+            </div>
+        </div>
+        <div class="text-center mb-8">
+            <button id="calculateBtn" class="w-full md:w-auto bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-lg flex items-center justify-center mx-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.414L11 9.586V6z" clip-rule="evenodd" /></svg>
+                Générer le Plan de Course
+            </button>
+        </div>
+        <div id="results" class="mt-10 hidden">
+            <div id="loader" class="flex justify-center items-center my-8 hidden"><div class="loader"></div><p class="ml-4 text-gray-600">Communication avec le serveur et calcul du plan...</p></div>
+            <div id="resultsContent">
+                <h2 class="text-2xl font-bold mb-4 text-center">Votre Plan de Course Personnalisé</h2>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8 text-center">
+                    <div class="bg-white p-4 rounded-xl shadow-md"><h3 class="text-sm font-medium text-gray-500">Temps Total</h3><p id="totalTime" class="text-2xl font-bold text-blue-600">--:--:--</p></div>
+                    <div class="bg-white p-4 rounded-xl shadow-md"><h3 class="text-sm font-medium text-gray-500">Distance</h3><p id="totalDistance" class="text-2xl font-bold">0 km</p></div>
+                    <div class="bg-white p-4 rounded-xl shadow-md"><h3 class="text-sm font-medium text-gray-500">Dénivelé+</h3><p id="totalElevation" class="text-2xl font-bold">0 m</p></div>
+                    <div class="bg-white p-4 rounded-xl shadow-md"><h3 class="text-sm font-medium text-gray-500">Calories</h3><p id="totalCalories" class="text-2xl font-bold">0 kcal</p></div>
+                    <div class="bg-white p-4 rounded-xl shadow-md"><h3 class="text-sm font-medium text-gray-500">Hydratation</h3><p id="totalHydration" class="text-2xl font-bold">0 mL/h</p></div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-lg overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-500"><thead class="text-xs text-gray-700 uppercase bg-gray-50"><tr><th scope="col" class="px-6 py-3">Segment</th><th scope="col" class="px-6 py-3">Distance</th><th scope="col" class="px-6 py-3">D+</th><th scope="col" class="px-6 py-3">Temps</th><th scope="col" class="px-6 py-3">Allure</th><th scope="col" class="px-6 py-3">T. Cumulé</th><th scope="col" class="px-6 py-3">Calories</th><th scope="col" class="px-6 py-3">Glucides</th><th scope="col" class="px-6 py-3">Hydratation</th></tr></thead><tbody id="resultsTableBody"></tbody></table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="modal-tech" class="modal-overlay hidden"> ... </div>
+    <div id="modal-fatigue" class="modal-overlay hidden"> ... </div>
+    <div id="modal-carbs" class="modal-overlay hidden"> ... </div>
+    <div id="modal-hydration" class="modal-overlay hidden"> ... </div>
+
+    <script>
+    const API_URL = 'http://127.0.0.1:8000/predict';
+    let map = null;
+    let gpxLayer = null;
+    let aidStations = [];
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('addReferenceBtn').addEventListener('click', addReferenceRow);
+        document.getElementById('gpxFile').addEventListener('change', handleGpxFileUpload);
+        document.getElementById('calculateBtn').addEventListener('click', handleApiCalculation);
+        const techTargetSlider = document.getElementById('techTarget');
+        const techTargetValue = document.getElementById('tech-target-value');
+        techTargetSlider.addEventListener('input', () => { techTargetValue.textContent = techTargetSlider.value; });
+        document.querySelectorAll('.info-icon').forEach(icon => {
+            icon.addEventListener('click', (e) => {
+                const modalId = e.currentTarget.getAttribute('data-modal');
+                document.getElementById(modalId).classList.remove('hidden');
+            });
+        });
+        function closeModal() {
+            document.querySelectorAll('.modal-overlay').forEach(modal => modal.classList.add('hidden'));
+        }
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+        });
+        document.querySelectorAll('.close-modal-btn').forEach(btn => btn.addEventListener('click', closeModal));
+        addReferenceRow();
+    });
+
+    function addReferenceRow() {
+        const template = document.getElementById('reference-template').content.cloneNode(true);
+        const referenceList = document.getElementById('reference-list');
+        template.querySelector('.remove-reference-btn').addEventListener('click', (e) => {
+            if (referenceList.children.length > 1) {
+                e.target.closest('.reference-item').remove();
+            } else {
+                alert("Vous devez conserver au moins une performance de référence.");
+            }
+        });
+        const techSlider = template.querySelector('.refTech');
+        const techValueSpan = template.querySelector('.tech-value');
+        techSlider.addEventListener('input', () => { techValueSpan.textContent = techSlider.value; });
+        referenceList.appendChild(template);
+    }
+
+    async function handleGpxFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        document.getElementById('map-section').classList.remove('hidden');
+        const gpxText = await file.text();
+        try {
+            displayGpxOnMap(gpxText);
+        } catch (error) {
+            alert(`Erreur d'affichage du GPX : ${error.message}`);
+            if (map && gpxLayer) map.removeLayer(gpxLayer);
+        }
+    }
+        
+    function displayGpxOnMap(gpxText) {
+        if (!map) {
+            map = L.map('map').setView([46.603354, 1.888334], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+        }
+        if (gpxLayer) map.removeLayer(gpxLayer);
+        aidStations.forEach(s => map.removeLayer(s.marker));
+        aidStations = [];
+        updateAidStationsList();
+
+        const domParser = new DOMParser();
+        const gpxDom = domParser.parseFromString(gpxText, 'text/xml');
+        const geojson = toGeoJSON.gpx(gpxDom);
+        if (!geojson.features || geojson.features.length === 0) {
+            throw new Error("Le fichier GPX ne contient aucune trace valide.");
+        }
+
+        gpxLayer = L.geoJSON(geojson, { style: { color: '#3b82f6', weight: 4, opacity: 0.8 } }).addTo(map);
+        map.fitBounds(gpxLayer.getBounds());
+        gpxLayer.on('click', addAidStation);
+
+        const mapMessage = document.getElementById('map-message');
+        mapMessage.textContent = 'Cliquez sur le parcours pour ajouter un point';
+        mapMessage.classList.remove('hidden');
+        setTimeout(() => mapMessage.classList.add('hidden'), 4000);
+    }
+
+    async function addAidStation(e) {
+        const latlng = e.latlng;
+        // Pour une version client-serveur, on ne peut plus calculer la distance côté client facilement.
+        // On place le marqueur, et le backend se chargera de le positionner précisément.
+        const stationId = Date.now();
+        const marker = L.marker(latlng).addTo(map);
+        const newStation = { lat: latlng.lat, lon: latlng.lng, marker, id: stationId, name: `Point ${aidStations.length + 1}`, cumulativeDistance: 0 }; // Distance sera calculée par le backend.
+        marker.bindPopup(`<b>${newStation.name}</b>`).openPopup();
+        aidStations.push(newStation);
+        updateAidStationsList(); // Met à jour l'UI, mais la distance n'est pas connue ici.
+    }
+
+    function updateAidStationsList() {
+        const list = document.getElementById('aid-stations-list');
+        list.innerHTML = '';
+        aidStations.sort((a,b) => a.id - b.id); // Pour garder un ordre stable
+        aidStations.forEach(station => {
+            const template = document.getElementById('aid-station-template').content.cloneNode(true);
+            template.querySelector('.station-name').value = station.name;
+            template.querySelector('.station-name').addEventListener('change', (e) => {
+                station.name = e.target.value;
+                station.marker.bindPopup(`<b>${station.name}</b>`).openPopup();
+            });
+            template.querySelector('.station-distance').textContent = `(calculé par le serveur)`;
+            template.querySelector('.remove-station-btn').addEventListener('click', () => {
+                const index = aidStations.findIndex(s => s.id === station.id);
+                if (index > -1) {
+                    map.removeLayer(aidStations[index].marker);
+                    aidStations.splice(index, 1);
+                    updateAidStationsList();
+                }
+            });
+            list.appendChild(template);
+        });
+        document.getElementById('splitDistanceContainer').style.display = aidStations.length > 0 ? 'none' : 'block';
+    }
+
+    async function handleApiCalculation() {
+        const resultsDiv = document.getElementById('results');
+        const loader = document.getElementById('loader');
+        const resultsContent = document.getElementById('resultsContent');
+        const gpxFile = document.getElementById('gpxFile').files[0];
+
+        try {
+            if (!gpxFile) throw new Error("Veuillez charger un fichier GPX.");
+            
+            const athleteData = buildAthleteDataPayload();
+            const formData = new FormData();
+            formData.append('gpx_file', gpxFile);
+            formData.append('athlete_data_str', JSON.stringify(athleteData));
+
+            resultsDiv.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            resultsContent.style.display = 'none';
+
+            const response = await fetch(API_URL, { method: 'POST', body: formData });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `Erreur du serveur (code ${response.status})`);
+            }
+            const racePlan = await response.json();
+            displayResults(racePlan);
+
+        } catch (error) {
+            alert(`Erreur : ${error.message}`);
+            resultsDiv.classList.add('hidden');
+        } finally {
+            loader.classList.add('hidden');
+            resultsContent.style.display = 'block';
+        }
+    }
+
+    function buildAthleteDataPayload() {
+        const references = [];
+        document.querySelectorAll('#reference-list .reference-item').forEach(item => {
+            references.push({
+                distance: parseFloat(item.querySelector('.refDistance').value),
+                time: item.querySelector('.refTime').value,
+                elevGain: parseInt(item.querySelector('.refElevGain').value, 10),
+                elevLoss: parseInt(item.querySelector('.refElevLoss').value, 10),
+                tech: parseFloat(item.querySelector('.refTech').value),
+            });
+        });
+        if (references.length === 0) throw new Error('Veuillez ajouter au moins une performance de référence.');
+
+        const techTargetScale = parseFloat(document.getElementById('techTarget').value);
+
+        return {
+            weight: parseFloat(document.getElementById('weight').value),
+            gender: document.getElementById('gender').value,
+            references: references,
+            techMultiplier: 1 + (techTargetScale - 1) * 0.075,
+            fatigueFactor: parseFloat(document.getElementById('fatigueFactor').value) / 100,
+            carbIntake: parseInt(document.getElementById('carbIntake').value, 10),
+            temperature: parseInt(document.getElementById('temperature').value, 10),
+            splitDistance: aidStations.length > 0 ? null : parseFloat(document.getElementById('splitDistance').value),
+            aidStations: aidStations.map(s => ({ name: s.name, cumulativeDistance: 0 })) // Le backend gère la distance
+        };
+    }
+
+    function formatTime(s) { if(isNaN(s)||!isFinite(s))return"--:--:--"; const h=Math.floor(s/3600).toString().padStart(2,'0'),m=Math.floor(s%3600/60).toString().padStart(2,'0'),sec=Math.floor(s%60).toString().padStart(2,'0'); return `${h}:${m}:${sec}`; }
+    function formatPace(s) { if(isNaN(s)||!isFinite(s))return"--'--\"/km"; const m=Math.floor(s/60).toString().padStart(2,'0'),sec=Math.floor(s%60).toString().padStart(2,'0'); return `${m}'${sec}"/km`; }
+
+    function displayResults(racePlan) {
+        const tableBody = document.getElementById('resultsTableBody');
+        tableBody.innerHTML = '';
+        
+        racePlan.plan.forEach(segment => {
+            const row = `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-6 py-4 font-medium text-gray-900">${segment.name}</td><td class="px-6 py-4">${(segment.distance/1000).toFixed(2)} km</td><td class="px-6 py-4">${segment.elevationGain.toFixed(0)} m</td><td class="px-6 py-4 font-semibold text-blue-600">${formatTime(segment.splitTime)}</td><td class="px-6 py-4">${formatPace(segment.pace)}</td><td class="px-6 py-4">${formatTime(segment.cumulativeTime)}</td><td class="px-6 py-4">${segment.calories.toFixed(0)} kcal</td><td class="px-6 py-4">${segment.carbsNeeded.toFixed(0)} g</td><td class="px-6 py-4 text-blue-500">${segment.hydrationNeeded.toFixed(0)} mL</td></tr>`;
+            tableBody.innerHTML += row;
+        });
+
+        document.getElementById('totalTime').textContent = formatTime(racePlan.totalTime);
+        document.getElementById('totalDistance').textContent = `${racePlan.totalDistance.toFixed(2)} km`;
+        document.getElementById('totalElevation').textContent = `${racePlan.totalElevation.toFixed(0)} m`;
+        document.getElementById('totalCalories').textContent = `${racePlan.totalCalories.toFixed(0)} kcal`;
+        document.getElementById('totalHydration').textContent = `${racePlan.hourlyHydration.toFixed(0)} mL/h`;
+    }
+    </script>
+</body>
+</html>
+
