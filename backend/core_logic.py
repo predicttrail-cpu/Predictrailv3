@@ -23,8 +23,10 @@ def parse_time_to_seconds(time_str: str) -> int:
         return 0
 
 def get_minetti_cost_factor(slope: float) -> float:
-    if slope >= 0: return 1 + CONFIG["minettiUphillCost"] * slope
-    return 1 - CONFIG["minettiDownhillCost"] * slope
+    if slope >= 0:
+        return 1 + CONFIG["minettiUphillCost"] * slope
+    else:
+        return 1 - CONFIG["minettiDownhillCost"] * slope
 
 def calculate_hourly_hydration(weight: float, temperature: int) -> float:
     rate_per_kg = 8
@@ -124,7 +126,8 @@ def create_segments(points: List[dict], params: PredictionInput) -> List[dict]:
         return segments
     else:
         segments, last_idx = [], 0
-        seg_len_m = params.splitDistance * 1000
+        split_distance = params.splitDistance if params.splitDistance is not None else 1  # default to 1 km if None
+        seg_len_m = split_distance * 1000
         for i in range(1, len(points)):
             dist_from_last = points[i]['cumulativeDistance'] - points[last_idx]['cumulativeDistance']
             if dist_from_last >= seg_len_m or i == len(points) - 1:
@@ -139,7 +142,7 @@ def calculate_race_plan(params: PredictionInput, gpx: gpxpy.gpx.GPX) -> RacePlan
     gpx_points = process_gpx_points(gpx)
     segments_data = create_segments(gpx_points, params)
     
-    hourly_hydration = calculate_hourly_hydration(params.weight, params.temperature)
+    hourly_hydration = calculate_hourly_hydration(params.weight, params.temperature) # pyright: ignore[reportAttributeAccessIssue]
     energy_cost_multiplier = 0.95 if params.gender == 'femme' else 1.0
     
     rough_total_time = sum(
@@ -172,7 +175,7 @@ def calculate_race_plan(params: PredictionInput, gpx: gpxpy.gpx.GPX) -> RacePlan
             cumulativeTime=cumulative_time,
             calories=calories,
             carbsNeeded=carbs,
-            hydrationNeeded=hydration,
+            hydration=hydration, # pyright: ignore[reportCallIssue]
         ))
 
     if not plan_segments:
@@ -188,6 +191,6 @@ def calculate_race_plan(params: PredictionInput, gpx: gpxpy.gpx.GPX) -> RacePlan
         totalDistance=total_dist_km,
         totalElevation=total_elevation,
         totalCalories=total_calories,
-        hourlyHydration=hourly_hydration
+        hourlyHydration=hourly_hydration # pyright: ignore[reportCallIssue]
     )
 

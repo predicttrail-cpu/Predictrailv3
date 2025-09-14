@@ -90,7 +90,7 @@ async def predict_race_plan(
     athlete_data_str: str = Form(...)
 ):
     # ... (le code de cette fonction reste identique)
-    if not gpx_file.filename.endswith('.gpx'):
+    if not gpx_file.filename or not gpx_file.filename.endswith('.gpx'):
         raise HTTPException(status_code=400, detail="Fichier invalide. Veuillez uploader un fichier .gpx.")
     try:
         athlete_data_dict = json.loads(athlete_data_str)
