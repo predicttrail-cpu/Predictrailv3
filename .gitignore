@@ -54,6 +54,8 @@ cover/
 # Translations
 *.mo
 *.pot
+#strava tokens
+.env
 
 # Django stuff:
 *.log
