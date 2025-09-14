@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PredictTrail - Plan de Course Avancé</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827;
+            color: #F9FAFB;
+        }
+
+        .card {
+            background-color: #1F2937;
+        }
+
+        .strava-btn {
+            background-color: #ffffff;
+            color: #1F2937;
+            border: 1px solid #D1D5DB;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .strava-btn:hover {
+            background-color: #F9FAFB;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .loader {
+            border-top-color: #FC4C02;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        input,
+        select {
+            background-color: #374151;
+            border: 1px solid #4B5563;
+            color: #F9FAFB;
+        }
+
+        #map {
+            height: 350px;
+            border-radius: 0.5rem;
+        }
+
+        .tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            width: 250px;
+            background-color: #111827;
+            padding: 8px 12px;
+            border-radius: 6px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            font-size: 0.75rem;
+            border: 1px solid #374151;
+        }
+
+        .tooltip-container:hover .tooltip {
+            opacity: 1;
+        }
+
+        .activity-item {
+            background-color: #374151;
+            transition: background-color 0.2s;
+        }
+
+        .activity-item.selected {
+            background-color: #059669;
+        }
+
+        .info-banner {
+            background-color: #374151;
+            border-left: 4px solid #F59E0B;
+        }
+    </style>
+</head>
+
+<body class="antialiased">
+    <div class="min-h-screen container mx-auto p-4 flex flex-col">
+        <div class="flex-grow">
+            <!-- Header -->
+            <header class="text-center my-8">
+                <h1 class="text-4xl md:text-5xl font-bold text-white">Predict<span class="text-orange-500">Trail</span>
+                </h1>
+                <p class="text-lg text-gray-300 mt-2">Votre plan de course et de nutrition.</p>
+            </header>
+
+            <main class="card rounded-xl shadow-2xl p-6 md:p-8 space-y-8">
+                <!-- Connexion Strava -->
+                <div id="strava-connect-section">
+                    <h2 class="text-2xl font-semibold text-center mb-4">Connectez votre compte Strava</h2>
+                    <button id="strava-login-btn"
+                        class="w-full max-w-sm mx-auto strava-btn font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 text-lg">
+                        <span>Se connecter avec</span>
+                        <img src="images/strava_trans.png" alt="Logo Strava" class="h-5 w-auto">
+                    </button>
+                </div>
+
+                <!-- Contenu Principal de l'App -->
+                <div id="app-content" class="hidden space-y-8">
+                    <!-- Section d'accueil -->
+                    <div id="athlete-welcome-section" class="hidden text-center">
+                        <div class="flex items-center justify-center space-x-4">
+                            <img id="athlete-avatar" src="" alt="Avatar"
+                                class="w-16 h-16 rounded-full border-2 border-orange-500">
+                            <div>
+                                <h2 class="text-2xl font-semibold">Bienvenue, <span id="athlete-name"></span>!</h2>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section Profilage -->
+                    <div id="profiling-section" class="space-y-4 text-center">
+                        <div class="flex justify-center items-center space-x-2 p-4">
+                            <div class="loader w-6 h-6 border-4 rounded-full"></div>
+                            <span class="text-lg">Analyse de votre profil de puissance...</span>
+                        </div>
+                    </div>
+
+                    <!-- Contenu du Formulaire -->
+                    <div id="main-form-content" class="hidden">
+                        <div id="profile-analysis-warning" class="hidden info-banner p-4 rounded-md mb-6">
+                            <p class="font-semibold">Profil Standard Appliqué</p>
+                            <p class="text-sm text-gray-300">Pour plus de précision, sélectionnez des activités avec des
+                                données de fréquence cardiaque.</p>
+                        </div>
+                        <div id="profile-summary-section"
+                            class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-gray-900 p-6 rounded-lg">
+                            <div>
+                                <h3 class="text-2xl font-semibold mb-4">Votre Profil de Traileur</h3>
+                                <div id="profile-text-summary" class="space-y-2 text-gray-300"></div>
+                            </div>
+                            <div class="h-64 md:h-80"><canvas id="profile-radar-chart"></canvas></div>
+                        </div>
+
+                        <form id="prediction-form" class="mt-8">
+                            <!-- Affiner le profil -->
+                            <div id="refine-profile-section" class="space-y-4 mb-8">
+                                <h3 class="text-xl font-semibold">Affiner le profil</h3>
+                                <p class="text-sm text-gray-400">Sélectionnez les activités les plus pertinentes pour
+                                    recalculer votre profil.</p>
+                                <button type="button" id="fetch-activities-btn"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Charger
+                                    mes activités</button>
+                                <div id="activities-loader" class="hidden flex items-center space-x-2">
+                                    <div class="loader w-4 h-4 border-2 rounded-full"></div><span>Chargement...</span>
+                                </div>
+                                <div id="activities-list" class="max-h-64 overflow-y-auto space-y-2 pr-2 mt-4"></div>
+                            </div>
+
+                            <!-- Paramètres, GPX, Carte, etc. -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <div class="space-y-6">
+                                    <div>
+                                        <h3 class="text-xl font-semibold border-b border-gray-600 pb-2 mb-4">Paramètres
+                                        </h3>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div><label for="weight">Poids (kg)</label><input type="number" id="weight"
+                                                    required class="w-full p-2 rounded-md"></div>
+                                            <div><label for="temperature">Température (°C)</label><input type="number"
+                                                    id="temperature" value="15" required class="w-full p-2 rounded-md">
+                                            </div>
+                                            <div><label for="carb_intake">Glucides (g/h)</label><input type="number"
+                                                    id="carb_intake" value="60" required class="w-full p-2 rounded-md">
+                                            </div>
+                                            <div><label>Technicité</label><input type="number" id="techMultiplier"
+                                                    value="1.4" required class="w-full p-2 rounded-md" step="0.1"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-semibold border-b border-gray-600 pb-2 mb-4">Fichier GPX
+                                        </h3>
+                                        <input type="file" id="gpx_file" accept=".gpx" required class="w-full">
+                                    </div>
+                                </div>
+                                <div class="space-y-6">
+                                    <div>
+                                        <h3 class="text-xl font-semibold mb-2">Carte & Ravitaillements</h3>
+                                        <p class="text-sm text-gray-400 mb-2">Cliquez sur la carte pour ajouter des
+                                            arrêts.</p>
+                                        <div id="map"></div>
+                                    </div>
+                                    <div id="aid-stations-list" class="space-y-2"></div>
+                                </div>
+                            </div>
+                            <button type="submit"
+                                class="w-full mt-8 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg text-lg">
+                                Calculer mon plan
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Loader, Erreurs et Résultats -->
+                <div id="loader" class="hidden flex justify-center items-center p-8">
+                    <div class="loader w-8 h-8"></div>
+                </div>
+                <div id="error-message" class="hidden p-4 bg-red-800 text-white rounded-md"></div>
+                <div id="results-container" class="hidden space-y-6"></div>
+            </main>
+        </div>
+
+        <footer class="text-center py-8 mt-8 text-xs text-gray-500">
+            <p>PredictTrail v2.2.0</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const stravaLoginBtn = document.getElementById('strava-login-btn');
+            const appContent = document.getElementById('app-content');
+            const predictionForm = document.getElementById('prediction-form');
+            const gpxFileInput = document.getElementById('gpx_file');
+            const loader = document.getElementById('loader');
+            const errorMessage = document.getElementById('error-message');
+            const resultsContainer = document.getElementById('results-container');
+            const mainFormContent = document.getElementById('main-form-content');
+            const profilingSection = document.getElementById('profiling-section');
+            const profileTextSummary = document.getElementById('profile-text-summary');
+            const fetchActivitiesBtn = document.getElementById('fetch-activities-btn');
+            const activitiesLoader = document.getElementById('activities-loader');
+            const activitiesList = document.getElementById('activities-list');
+            const profileAnalysisWarning = document.getElementById('profile-analysis-warning');
+            const weightInput = document.getElementById('weight');
+
+            // --- Global State ---
+            let accessToken = null, athleteData = null, map, gpxTrack, profileRadarChart;
+            let selectedActivityIds = new Set();
+
+            // --- Core Logic ---
+
+            async function handleStravaAuth() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                if (code) {
+                    history.pushState({}, '', window.location.pathname);
+                    try {
+                        document.getElementById('strava-connect-section').innerHTML = `<div class="flex justify-center"><div class="loader w-8 h-8"></div></div>`;
+                        const tokenData = await apiFetch('/api/auth/strava/token', { method: 'POST', body: new URLSearchParams({ code }) });
+                        accessToken = tokenData.access_token;
+                        athleteData = tokenData.athlete; // Store athlete data globally
+
+                        document.getElementById('strava-connect-section').classList.add('hidden');
+                        appContent.classList.remove('hidden');
+
+                        displayWelcome(athleteData); // Display welcome message immediately
+                        initMap();
+                        await fetchAndDisplayProfile();
+
+                    } catch (error) { showError(error, "L'authentification Strava a échoué"); }
+                }
+            }
+
+            async function fetchAndDisplayProfile() {
+                profilingSection.classList.remove('hidden');
+                mainFormContent.classList.add('hidden');
+                errorMessage.classList.add('hidden');
+                profileAnalysisWarning.classList.add('hidden');
+                try {
+                    const profile = await apiFetch('/api/athlete/profile', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'X-Manual-Activity-IDs': JSON.stringify(Array.from(selectedActivityIds))
+                        }
+                    });
+
+                    if (profile.analysis_level === 'standard') {
+                        profileAnalysisWarning.classList.remove('hidden');
+                    }
+
+                    displayProfileSummary(profile);
+                    displayRadarChart(profile.radar_data);
+                    mainFormContent.classList.remove('hidden');
+                } catch (error) {
+                    showError(error, "Impossible de générer le profil");
+                }
+                finally {
+                    profilingSection.classList.add('hidden');
+                    if (map) { setTimeout(() => map.invalidateSize(), 100); }
+                }
+            }
+
+            predictionForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                loader.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+                resultsContainer.classList.add('hidden');
+
+                try {
+                    const formData = new FormData();
+                    const params = {
+                        weight: parseFloat(weightInput.value),
+                        tech_multiplier: parseFloat(document.getElementById('techMultiplier').value),
+                        temperature: parseInt(document.getElementById('temperature').value),
+                        carb_intake: parseInt(document.getElementById('carb_intake').value),
+                        manual_activity_ids: Array.from(selectedActivityIds),
+                        aid_stations: Array.from(document.querySelectorAll('.aid-station-group')).map(group => ({
+                            distance: parseFloat(group.querySelector('.aid-distance').value),
+                            duration: parseFloat(group.querySelector('.aid-duration').value) * 60,
+                            name: group.querySelector('.aid-name').value
+                        })).filter(s => !isNaN(s.distance))
+                    };
+
+                    formData.append('athlete_data_str', JSON.stringify(params));
+                    formData.append('gpx_file', gpxFileInput.files[0]);
+
+                    const racePlan = await apiFetch('/api/predict', {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    displayResults(racePlan);
+                } catch (error) { showError(error, "Erreur de prédiction"); }
+                finally { loader.classList.add('hidden'); }
+            });
+
+            stravaLoginBtn.addEventListener('click', async () => {
+                try {
+                    const config = await apiFetch('/api/config');
+                    window.location.href = `https://www.strava.com/oauth/authorize?client_id=${config.strava_client_id}&redirect_uri=${window.location.origin}&response_type=code&scope=read,activity:read_all`;
+                } catch (error) { showError(error, "Impossible de charger la configuration"); }
+            });
+
+            fetchActivitiesBtn.addEventListener('click', async () => {
+                activitiesLoader.classList.remove('hidden');
+                activitiesList.innerHTML = '';
+                errorMessage.classList.add('hidden');
+                try {
+                    const activities = await apiFetch('/api/strava/activities', { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                    displayActivitiesList(activities);
+                } catch (error) { showError(error, "Impossible de charger les activités"); }
+                finally { activitiesLoader.classList.add('hidden'); }
+            });
+
+            gpxFileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                try {
+                    const formData = new FormData();
+                    formData.append('gpx_file', file);
+                    const data = await apiFetch('/api/gpx/parse', { method: 'POST', body: formData });
+                    displayGpxOnMap(data.points);
+                } catch (error) { showError(error, "Erreur Fichier GPX"); }
+            });
+
+            function displayWelcome(athleteData) {
+                const welcomeSection = document.getElementById('athlete-welcome-section');
+                document.getElementById('athlete-name').textContent = athleteData.firstname;
+                document.getElementById('athlete-avatar').src = athleteData.profile_medium;
+                weightInput.value = athleteData.weight || 70;
+                welcomeSection.classList.remove('hidden');
+            }
+
+            function displayProfileSummary(profile) {
+                profileTextSummary.innerHTML = `
+                    <p><strong class="text-white">Profil :</strong> <span class="text-orange-400 font-semibold">${profile.runner_type}</span></p>
+                    <p><strong class="text-white">Puissance Montée :</strong> ${profile.vam.toFixed(0)} m/h</p>
+                    <p><strong class="text-white">Endurance Fond. :</strong> ${(profile.aerobic_endurance_speed * 3.6).toFixed(1)} km/h</p>
+                    <p><strong class="text-white">Technique Descente :</strong> ${(profile.downhill_technique_speed * 3.6).toFixed(1)} km/h</p>`;
+            }
+
+            function displayRadarChart(radarData) {
+                const canvas = document.getElementById('profile-radar-chart');
+                if (profileRadarChart) profileRadarChart.destroy();
+                const ctx = canvas.getContext('2d');
+                profileRadarChart = new Chart(ctx, {
+                    type: 'radar',
+                    data: { labels: Object.keys(radarData), datasets: [{ label: 'Votre Profil', data: Object.values(radarData), fill: true, backgroundColor: 'rgba(252, 76, 2, 0.2)', borderColor: '#FC4C02', pointBackgroundColor: '#FC4C02' }] },
+                    options: { maintainAspectRatio: false, scales: { r: { suggestedMin: 0, suggestedMax: 100, grid: { color: 'rgba(255, 255, 255, 0.2)' }, angleLines: { color: 'rgba(255, 255, 255, 0.2)' }, pointLabels: { color: '#D1D5DB' } } }, plugins: { legend: { display: false } } }
+                });
+            }
+
+            function displayActivitiesList(activities) {
+                activitiesList.innerHTML = '';
+                activities.forEach(act => {
+                    const div = document.createElement('div');
+                    div.className = 'activity-item p-3 rounded-md cursor-pointer flex justify-between items-center';
+                    div.dataset.activityId = act.id;
+                    const date = new Date(act.start_date_local).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                    div.innerHTML = `<div><p class="font-semibold">${act.name}</p><p class="text-sm text-gray-400">${date} - ${(act.distance / 1000).toFixed(1)} km - ${act.total_elevation_gain.toFixed(0)} D+</p></div><input type="checkbox" class="activity-checkbox h-5 w-5 rounded">`;
+                    activitiesList.appendChild(div);
+                });
+
+                activitiesList.addEventListener('change', (e) => {
+                    const item = e.target.closest('.activity-item');
+                    const id = item.dataset.activityId;
+                    if (e.target.checked) { selectedActivityIds.add(id); item.classList.add('selected'); }
+                    else { selectedActivityIds.delete(id); item.classList.remove('selected'); }
+                    fetchAndDisplayProfile();
+                });
+            }
+
+            function displayResults(plan) {
+                resultsContainer.innerHTML = `<h2 class="text-3xl font-bold text-center">Votre Plan de Course</h2> <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Temps Total</p><p class="text-2xl font-bold text-orange-500">${formatTime(plan.total_time)}</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Calories</p><p class="text-2xl font-bold">${plan.total_calories.toFixed(0)}</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Glucides</p><p class="text-2xl font-bold">${plan.total_carbs.toFixed(0)} g</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Hydratation</p><p class="text-2xl font-bold">${(plan.total_hydration / 1000).toFixed(1)} L</p></div> </div> <div class="overflow-x-auto"> <table class="min-w-full divide-y divide-gray-700"> <thead class="bg-gray-700"><tr> <th class="px-2 py-3 text-left text-xs uppercase">Segment</th> <th class="px-2 py-3 text-left text-xs uppercase">Allure</th> <th class="px-2 py-3 text-left text-xs uppercase">Temps</th> <th class="px-2 py-3 text-left text-xs uppercase">D+</th> <th class="px-2 py-3 text-left text-xs uppercase">kcal</th> <th class="px-2 py-3 text-left text-xs uppercase">g</th> <th class="px-2 py-3 text-left text-xs uppercase">ml</th> </tr></thead> <tbody id="results-table-body" class="bg-gray-800 divide-y divide-gray-600"></tbody> </table> </div>`;
+                const tableBody = document.getElementById('results-table-body');
+                plan.plan.forEach(seg => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td class="px-2 py-3">${seg.name}</td><td>${formatPace(seg.pace)}/km</td><td>${formatTime(seg.time)}</td><td>${Math.round(seg.elevation_gain)} m</td><td>${seg.calories.toFixed(0)}</td><td>${seg.carbs_needed.toFixed(0)}</td><td>${seg.hydration_needed.toFixed(0)}</td>`;
+                    tableBody.appendChild(row);
+                });
+                container.classList.remove('hidden');
+            }
+
+            function initMap() { if (map) return; map = L.map('map').setView([46.6, 1.8], 5); L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 }).addTo(map); }
+            function displayGpxOnMap(points) { if (gpxTrack) map.removeLayer(gpxTrack); const latLngs = points.map(p => [p.lat, p.lon]); gpxTrack = L.polyline(latLngs, { color: '#FC4C02', weight: 4 }).addTo(map); map.fitBounds(gpxTrack.getBounds()); }
+
+            async function apiFetch(url, options = {}) {
+                const isStravaApiCall = url.startsWith('/api/v3/');
+                if (isStravaApiCall) {
+                    // This route must be proxied by our backend to avoid CORS and keep secrets safe
+                    // For now, let's assume this call will be handled by a backend endpoint
+                    // This is a conceptual placeholder. The backend needs to expose an endpoint for this.
+                    // Let's create a proxy endpoint for this.
+                    // For now, this call is the issue. I will fix it by calling our backend.
+                }
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw errorData;
+                }
+                return response.json();
+            }
+
+            function showError(error, context) {
+                const message = error.detail || error.message || "Erreur inconnue.";
+                errorMessage.textContent = `${context}: ${message}`;
+                errorMessage.classList.remove('hidden');
+                console.error(context, error);
+            }
+
+            function formatTime(s) { if (isNaN(s)) return 'N/A'; const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${Math.floor(s % 60).toString().padStart(2, '0')}`; }
+            function formatPace(s) { if (isNaN(s)) return 'N/A'; const m = Math.floor(s / 60); return `${m}'${Math.floor(s % 60).toString().padStart(2, '0')}"`; }
+
+            handleStravaAuth();
+        });
+    </script>
+</body>
+
+</html>

@@ -4,3 +4,5 @@ python-multipart
 gpxpy
 pydantic
 requests
+numpy
+pandas
