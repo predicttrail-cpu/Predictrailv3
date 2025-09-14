@@ -5,71 +5,43 @@ import json
 from fastapi import FastAPI, Form, HTTPException, UploadFile, File, Request, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import RedirectResponse
-import json
-import requests # Import de la nouvelle librairie
-    
-from models import PredictionInput, RacePlan
-from core_logic import calculate_race_plan
-import gpxpy
-    
-# --- CONFIGURATION STRAVA ---
-    # ATTENTION: Ne jamais mettre ces clés en dur dans le code sur GitHub!
-    # Pour le développement, vous pouvez les mettre ici temporairement.
-    # Pour la production, utilisez des variables d'environnement.
-STRAVA_CLIENT_ID =   146343   # Remplacez par votre Client ID
-STRAVA_CLIENT_SECRET = "6f240bf672c156cb074ec22e1f56ed8bc50f77ce"  # Remplacez par votre Client Secret
-STRAVA_REDIRECT_URI = "http://localhost:8000/auth/strava/callback"
-    
-app = FastAPI(
-        title="PredicTrail API",
-        description="Une API pour calculer des plans de course et s'authentifier avec Strava.",
-        version="1.1.0"
-    )
-    
-app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    
-@app.get("/")
-def read_root():
-        return {"status": "API is running."}
-    
-# --- NOUVELLE ROUTE : Redirection vers Strava pour la connexion ---
-@app.get("/login/strava")
-def login_strava():
-    """
-    Redirige l'utilisateur vers la page d'autorisation de Strava.
-    """
-    strava_auth_url = (
-        f"https://www.strava.com/oauth/authorize?"
-        f"client_id={STRAVA_CLIENT_ID}&"
-        f"redirect_uri={STRAVA_REDIRECT_URI}&"
-        f"response_type=code&"
-        f"approval_prompt=force&"
-        f"scope=read,activity:read" # On demande la permission de lire les infos et activités
-    )
-    return RedirectResponse(url=strava_auth_url)
+from dotenv import load_dotenv
+from typing import List, Dict, Any
 
-# --- NOUVELLE ROUTE : Le "Callback" que Strava appelle après autorisation ---
-@app.get("/auth/strava/callback")
-def auth_strava_callback(code: str = Query(...)):
-    """
-    Strava redirige ici après que l'utilisateur a autorisé l'application.
-    On échange le 'code' temporaire contre un 'access_token' permanent.
-    """
-    token_exchange_url = "https://www.strava.com/oauth/token"
-    payload = {
-        "client_id": STRAVA_CLIENT_ID,
-        "client_secret": STRAVA_CLIENT_SECRET,
-        "code": code,
-        "grant_type": "authorization_code"
-    }
+from models import PredictionInput, RacePlan, StravaActivity, AthleteProfile
+from core_logic import calculate_race_plan, get_and_sort_strava_activities, AthleteProfiler, GpxProcessor
 
+load_dotenv()
+STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
+STRAVA_CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
+
+app = FastAPI(title="PredictTrail API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# --- Fonctions Utilitaires Strava ---
+def fetch_strava_api(token: str, endpoint: str) -> Any:
+    url = f"https://www.strava.com/api/v3/{endpoint}"
+    headers = {'Authorization': f'Bearer {token}'}
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        status_code = e.response.status_code if e.response is not None else 500
+        detail = f"Erreur API Strava ({endpoint}): {e}"
+        if e.response is not None:
+            try: detail = f"Erreur API Strava ({endpoint}): {e.response.json()}"
+            except json.JSONDecodeError: pass
+        raise HTTPException(status_code=status_code, detail=detail)
+
+# --- ROUTES API ---
+@app.get("/api/config")
+def get_config(): return {"strava_client_id": STRAVA_CLIENT_ID}
+
+@app.post("/api/auth/strava/token")
+async def strava_token(code: str = Form(...)):
+    token_url = "https://www.strava.com/api/v3/oauth/token"
+    payload = { "client_id": STRAVA_CLIENT_ID, "client_secret": STRAVA_CLIENT_SECRET, "code": code, "grant_type": "authorization_code" }
     try:
         response = requests.post(token_url, data=payload)
         response.raise_for_status()

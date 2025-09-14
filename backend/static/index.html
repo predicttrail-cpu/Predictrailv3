@@ -228,7 +228,6 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // --- DOM Elements ---
             const stravaLoginBtn = document.getElementById('strava-login-btn');
             const appContent = document.getElementById('app-content');
             const predictionForm = document.getElementById('prediction-form');
@@ -245,11 +244,8 @@
             const profileAnalysisWarning = document.getElementById('profile-analysis-warning');
             const weightInput = document.getElementById('weight');
 
-            // --- Global State ---
             let accessToken = null, athleteData = null, map, gpxTrack, profileRadarChart;
             let selectedActivityIds = new Set();
-
-            // --- Core Logic ---
 
             async function handleStravaAuth() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -260,15 +256,14 @@
                         document.getElementById('strava-connect-section').innerHTML = `<div class="flex justify-center"><div class="loader w-8 h-8"></div></div>`;
                         const tokenData = await apiFetch('/api/auth/strava/token', { method: 'POST', body: new URLSearchParams({ code }) });
                         accessToken = tokenData.access_token;
-                        athleteData = tokenData.athlete; // Store athlete data globally
+                        athleteData = tokenData.athlete;
 
                         document.getElementById('strava-connect-section').classList.add('hidden');
                         appContent.classList.remove('hidden');
 
-                        displayWelcome(athleteData); // Display welcome message immediately
+                        displayWelcome(athleteData);
                         initMap();
                         await fetchAndDisplayProfile();
-
                     } catch (error) { showError(error, "L'authentification Strava a échoué"); }
                 }
             }
@@ -414,7 +409,8 @@
             }
 
             function displayResults(plan) {
-                resultsContainer.innerHTML = `<h2 class="text-3xl font-bold text-center">Votre Plan de Course</h2> <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Temps Total</p><p class="text-2xl font-bold text-orange-500">${formatTime(plan.total_time)}</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Calories</p><p class="text-2xl font-bold">${plan.total_calories.toFixed(0)}</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Glucides</p><p class="text-2xl font-bold">${plan.total_carbs.toFixed(0)} g</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Hydratation</p><p class="text-2xl font-bold">${(plan.total_hydration / 1000).toFixed(1)} L</p></div> </div> <div class="overflow-x-auto"> <table class="min-w-full divide-y divide-gray-700"> <thead class="bg-gray-700"><tr> <th class="px-2 py-3 text-left text-xs uppercase">Segment</th> <th class="px-2 py-3 text-left text-xs uppercase">Allure</th> <th class="px-2 py-3 text-left text-xs uppercase">Temps</th> <th class="px-2 py-3 text-left text-xs uppercase">D+</th> <th class="px-2 py-3 text-left text-xs uppercase">kcal</th> <th class="px-2 py-3 text-left text-xs uppercase">g</th> <th class="px-2 py-3 text-left text-xs uppercase">ml</th> </tr></thead> <tbody id="results-table-body" class="bg-gray-800 divide-y divide-gray-600"></tbody> </table> </div>`;
+                const container = document.getElementById('results-container');
+                container.innerHTML = `<h2 class="text-3xl font-bold text-center">Votre Plan de Course</h2> <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Temps Total</p><p class="text-2xl font-bold text-orange-500">${formatTime(plan.total_time)}</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Calories</p><p class="text-2xl font-bold">${plan.total_calories.toFixed(0)}</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Glucides</p><p class="text-2xl font-bold">${plan.total_carbs.toFixed(0)} g</p></div> <div class="bg-gray-900 p-4 rounded-lg"><p class="text-gray-400">Hydratation</p><p class="text-2xl font-bold">${(plan.total_hydration / 1000).toFixed(1)} L</p></div> </div> <div class="overflow-x-auto"> <table class="min-w-full divide-y divide-gray-700"> <thead class="bg-gray-700"><tr> <th class="px-2 py-3 text-left text-xs uppercase">Segment</th> <th class="px-2 py-3 text-left text-xs uppercase">Allure</th> <th class="px-2 py-3 text-left text-xs uppercase">Temps</th> <th class="px-2 py-3 text-left text-xs uppercase">D+</th> <th class="px-2 py-3 text-left text-xs uppercase">kcal</th> <th class="px-2 py-3 text-left text-xs uppercase">g</th> <th class="px-2 py-3 text-left text-xs uppercase">ml</th> </tr></thead> <tbody id="results-table-body" class="bg-gray-800 divide-y divide-gray-600"></tbody> </table> </div>`;
                 const tableBody = document.getElementById('results-table-body');
                 plan.plan.forEach(seg => {
                     const row = document.createElement('tr');
@@ -428,13 +424,8 @@
             function displayGpxOnMap(points) { if (gpxTrack) map.removeLayer(gpxTrack); const latLngs = points.map(p => [p.lat, p.lon]); gpxTrack = L.polyline(latLngs, { color: '#FC4C02', weight: 4 }).addTo(map); map.fitBounds(gpxTrack.getBounds()); }
 
             async function apiFetch(url, options = {}) {
-                const isStravaApiCall = url.startsWith('/api/v3/');
-                if (isStravaApiCall) {
-                    // This route must be proxied by our backend to avoid CORS and keep secrets safe
-                    // For now, let's assume this call will be handled by a backend endpoint
-                    // This is a conceptual placeholder. The backend needs to expose an endpoint for this.
-                    // Let's create a proxy endpoint for this.
-                    // For now, this call is the issue. I will fix it by calling our backend.
+                if (url.startsWith('/api/v3/')) { // This is a Strava API call
+                    options.headers = { ...options.headers, 'Authorization': `Bearer ${accessToken}` };
                 }
                 const response = await fetch(url, options);
                 if (!response.ok) {
