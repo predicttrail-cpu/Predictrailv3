@@ -55,6 +55,7 @@ cover/
 *.mo
 *.pot
 #strava tokens
+backend/config.py
 .env
 
 # Django stuff:

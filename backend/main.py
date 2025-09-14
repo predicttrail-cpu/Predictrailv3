@@ -6,15 +6,8 @@ import requests # Import de la nouvelle librairie
     
 from models import PredictionInput, RacePlan
 from core_logic import calculate_race_plan
+from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REDIRECT_URI
 import gpxpy
-    
-# --- CONFIGURATION STRAVA ---
-    # ATTENTION: Ne jamais mettre ces clés en dur dans le code sur GitHub!
-    # Pour le développement, vous pouvez les mettre ici temporairement.
-    # Pour la production, utilisez des variables d'environnement.
-STRAVA_CLIENT_ID =   146343   # Remplacez par votre Client ID
-STRAVA_CLIENT_SECRET = "6f240bf672c156cb074ec22e1f56ed8bc50f77ce"  # Remplacez par votre Client Secret
-STRAVA_REDIRECT_URI = "http://localhost:8000/auth/strava/callback"
     
 app = FastAPI(
         title="PredicTrail API",
@@ -57,7 +50,7 @@ def auth_strava_callback(code: str = Query(...)):
     Strava redirige ici après que l'utilisateur a autorisé l'application.
     On échange le 'code' temporaire contre un 'access_token' permanent.
     """
-    token_exchange_url = "https://www.strava.com/oauth/token"
+    token_exchange_url = "https://www.strava.com/api/v3/oauth/token"
     payload = {
         "client_id": STRAVA_CLIENT_ID,
         "client_secret": STRAVA_CLIENT_SECRET,
