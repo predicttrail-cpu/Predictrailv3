@@ -1,6 +1,6 @@
 import math
 from typing import List
-from models import PredictionInput, RacePlan, Segment, ReferencePerformance
+from models import RacePlan, Segment, ReferencePerformance, PredictionInput
 import gpxpy
 import gpxpy.gpx
 
