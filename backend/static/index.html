@@ -206,7 +206,6 @@
                         </form>
                     </div>
                 </div>
-                <!-- Loader, Erreurs et Résultats -->
                 <div id="loader" class="hidden flex justify-center items-center p-8">
                     <div class="loader w-8 h-8"></div>
                 </div>
@@ -259,6 +258,7 @@
                     } catch (error) { showError(error, "L'authentification Strava a échoué"); }
                 }
             }
+
             async function fetchAndDisplayProfile() {
                 profilingSection.classList.remove('hidden');
                 mainFormContent.classList.add('hidden');
@@ -286,7 +286,9 @@
                 finally {
                     profilingSection.classList.add('hidden');
                     if (map) { setTimeout(() => map.invalidateSize(), 100); }
+                }
             }
+
             predictionForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 loader.classList.remove('hidden');
@@ -409,8 +411,18 @@
                 container.classList.remove('hidden');
             }
 
-            function initMap() { if (map) return; map = L.map('map').setView([46.6, 1.8], 5); L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 }).addTo(map); }
-            function displayGpxOnMap(points) { if (gpxTrack) map.removeLayer(gpxTrack); const latLngs = points.map(p => [p.lat, p.lon]); gpxTrack = L.polyline(latLngs, { color: '#FC4C02', weight: 4 }).addTo(map); map.fitBounds(gpxTrack.getBounds()); }
+            function initMap() {
+                if (map) return;
+                map = L.map('map').setView([46.6, 1.8], 5);
+                L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 }).addTo(map);
+            }
+
+            function displayGpxOnMap(points) {
+                if (gpxTrack) map.removeLayer(gpxTrack);
+                const latLngs = points.map(p => [p.lat, p.lon]);
+                gpxTrack = L.polyline(latLngs, { color: '#FC4C02', weight: 4 }).addTo(map);
+                map.fitBounds(gpxTrack.getBounds());
+            }
 
             async function apiFetch(url, options = {}) {
                 if (url.startsWith('/api/v3/')) { // This is a Strava API call
