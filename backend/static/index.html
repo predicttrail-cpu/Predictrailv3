@@ -116,7 +116,6 @@
                         <img src="images/strava_trans.png" alt="Logo Strava" class="h-5 w-auto">
                     </button>
                 </div>
-
                 <!-- Contenu Principal de l'App -->
                 <div id="app-content" class="hidden space-y-8">
                     <!-- Section d'accueil -->
@@ -137,7 +136,6 @@
                             <span class="text-lg">Analyse de votre profil de puissance...</span>
                         </div>
                     </div>
-
                     <!-- Contenu du Formulaire -->
                     <div id="main-form-content" class="hidden">
                         <div id="profile-analysis-warning" class="hidden info-banner p-4 rounded-md mb-6">
@@ -153,7 +151,6 @@
                             </div>
                             <div class="h-64 md:h-80"><canvas id="profile-radar-chart"></canvas></div>
                         </div>
-
                         <form id="prediction-form" class="mt-8">
                             <!-- Affiner le profil -->
                             <div id="refine-profile-section" class="space-y-4 mb-8">
@@ -168,7 +165,6 @@
                                 </div>
                                 <div id="activities-list" class="max-h-64 overflow-y-auto space-y-2 pr-2 mt-4"></div>
                             </div>
-
                             <!-- Paramètres, GPX, Carte, etc. -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                 <div class="space-y-6">
@@ -178,9 +174,8 @@
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div><label for="weight">Poids (kg)</label><input type="number" id="weight"
                                                     required class="w-full p-2 rounded-md"></div>
-                                            <div><label for="temperature">Température (°C)</label><input type="number"
-                                                    id="temperature" value="15" required class="w-full p-2 rounded-md">
-                                            </div>
+                                            <div><label for="race_date">Date de la course</label><input type="date"
+                                                    id="race_date" required class="w-full p-2 rounded-md"></div>
                                             <div><label for="carb_intake">Glucides (g/h)</label><input type="number"
                                                     id="carb_intake" value="60" required class="w-full p-2 rounded-md">
                                             </div>
@@ -211,7 +206,6 @@
                         </form>
                     </div>
                 </div>
-
                 <!-- Loader, Erreurs et Résultats -->
                 <div id="loader" class="hidden flex justify-center items-center p-8">
                     <div class="loader w-8 h-8"></div>
@@ -220,12 +214,10 @@
                 <div id="results-container" class="hidden space-y-6"></div>
             </main>
         </div>
-
         <footer class="text-center py-8 mt-8 text-xs text-gray-500">
-            <p>PredictTrail v2.2.0</p>
+            <p>PredictTrail v2.3.0</p>
         </footer>
     </div>
-
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const stravaLoginBtn = document.getElementById('strava-login-btn');
@@ -267,7 +259,6 @@
                     } catch (error) { showError(error, "L'authentification Strava a échoué"); }
                 }
             }
-
             async function fetchAndDisplayProfile() {
                 profilingSection.classList.remove('hidden');
                 mainFormContent.classList.add('hidden');
@@ -295,9 +286,7 @@
                 finally {
                     profilingSection.classList.add('hidden');
                     if (map) { setTimeout(() => map.invalidateSize(), 100); }
-                }
             }
-
             predictionForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 loader.classList.remove('hidden');
@@ -444,7 +433,6 @@
 
             function formatTime(s) { if (isNaN(s)) return 'N/A'; const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${Math.floor(s % 60).toString().padStart(2, '0')}`; }
             function formatPace(s) { if (isNaN(s)) return 'N/A'; const m = Math.floor(s / 60); return `${m}'${Math.floor(s % 60).toString().padStart(2, '0')}"`; }
-
             handleStravaAuth();
         });
     </script>
