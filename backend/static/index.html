@@ -54,7 +54,6 @@
         }
 
         #map {
-            height: 350px;
             border-radius: 0.5rem;
         }
 
@@ -96,17 +95,16 @@
     </style>
 </head>
 
-<body class="antialiased">
-    <div class="min-h-screen container mx-auto p-4 flex flex-col">
-        <div class="flex-grow">
-            <!-- Header -->
-            <header class="text-center my-8">
-                <h1 class="text-4xl md:text-5xl font-bold text-white">Predict<span class="text-orange-500">Trail</span>
-                </h1>
-                <p class="text-lg text-gray-300 mt-2">Votre plan de course et de nutrition.</p>
-            </header>
+<body class="antialiased theme-dark">
+    <main class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- Header -->
+        <header class="text-center my-6 md:my-8">
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white">Predict<span
+                    class="text-orange-500">Trail</span></h1>
+            <p class="text-md sm:text-lg text-gray-300 mt-2">Votre plan de course et de nutrition.</p>
+        </header>
 
-            <main class="card rounded-xl shadow-2xl p-6 md:p-8 space-y-8">
+        <div class="card rounded-xl shadow-2xl p-4 sm:p-6 md:p-8 space-y-8 max-w-4xl mx-auto">
                 <!-- Connexion Strava -->
                 <div id="strava-connect-section">
                     <h2 class="text-2xl font-semibold text-center mb-4">Connectez votre compte Strava</h2>
@@ -144,9 +142,9 @@
                                 données de fréquence cardiaque.</p>
                         </div>
                         <div id="profile-summary-section"
-                            class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-gray-900 p-6 rounded-lg">
-                            <div>
-                                <h3 class="text-2xl font-semibold mb-4">Votre Profil de Traileur</h3>
+                            class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-center bg-gray-900 p-4 sm:p-6 rounded-lg">
+                            <div class="text-center md:text-left">
+                                <h3 class="text-xl sm:text-2xl font-semibold mb-4">Votre Profil de Traileur</h3>
                                 <div id="profile-text-summary" class="space-y-2 text-gray-300"></div>
                             </div>
                             <div class="h-64 md:h-80"><canvas id="profile-radar-chart"></canvas></div>
@@ -166,12 +164,12 @@
                                 <div id="activities-list" class="max-h-64 overflow-y-auto space-y-2 pr-2 mt-4"></div>
                             </div>
                             <!-- Paramètres, GPX, Carte, etc. -->
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div class="space-y-6">
                                     <div>
                                         <h3 class="text-xl font-semibold border-b border-gray-600 pb-2 mb-4">Paramètres
                                         </h3>
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div><label for="weight">Poids (kg)</label><input type="number" id="weight"
                                                     required class="w-full p-2 rounded-md"></div>
                                             <div><label for="race_date">Date de la course</label><input type="date"
@@ -194,9 +192,9 @@
                                         <h3 class="text-xl font-semibold mb-2">Carte & Ravitaillements</h3>
                                         <p class="text-sm text-gray-400 mb-2">Cliquez sur la carte pour ajouter des
                                             arrêts.</p>
-                                        <div id="map"></div>
+                                        <div id="map" class="h-64 md:h-80 w-full bg-gray-800 rounded-lg"></div>
                                     </div>
-                                    <div id="aid-stations-list" class="space-y-2"></div>
+                                    <div id="aid-stations-list" class="space-y-2 mt-4"></div>
                                 </div>
                             </div>
                             <button type="submit"
