@@ -7,9 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from typing import List, Dict, Any
-
 from models import PredictionInput, RacePlan, StravaActivity, AthleteProfile
-from core_logic import calculate_race_plan, get_and_sort_strava_activities, AthleteProfiler, GpxProcessor
+from core_logic import calculate_race_plan, get_and_sort_strava_activities, AthleteProfiler, GpxProcessor, _calculate_activity_effort_score
 
 load_dotenv()
 STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
@@ -61,20 +60,33 @@ async def get_athlete_profile(request: Request, authorization: str = Header(...)
     manual_ids = json.loads(request.headers.get('x-manual-activity-ids', '[]'))
     
     try:
+        athlete_data = fetch_strava_api(token, "athlete")
+        max_hr = athlete_data.get('max_hr')
         activity_ids_to_fetch = manual_ids
+
         if not manual_ids:
-            all_activities = fetch_strava_api(token, "athlete/activities?per_page=100")
-            races = [act for act in all_activities if act.get('workout_type') == 1]
-            if len(races) < 3:
-                suffer_score_activities = sorted([act for act in all_activities if (act.get('suffer_score') or 0) > 0], key=lambda x: x.get('suffer_score', 0), reverse=True)
-                relevant_activities = suffer_score_activities[:5]
+            all_activities = fetch_strava_api(token, "athlete/activities?per_page=50")
+            races = [act for act in all_activities if act.get('workout_type') == 1 and act.get('distance',0) > 5000]
+            if races:
+                activity_ids_to_fetch = [r['id'] for r in races]
             else:
-                relevant_activities = races
-            activity_ids_to_fetch = [act['id'] for act in relevant_activities]
+                efforts = []
+                for act in all_activities:
+                    if act.get('type') == 'Run' and act.get('distance', 0) > 5000:
+                        try:
+                            stream = fetch_strava_api(token, f"activities/{act['id']}/streams?keys=time,altitude,heartrate,velocity_smooth,distance,cadence&key_by_type=true")
+                            profiler = AthleteProfiler([stream], athlete_data.get('weight', 70), max_hr)
+                            df = profiler._stream_to_dataframe(stream)
+                            df_segments = profiler._dataframe_to_segments(df, 'heartrate' in df.columns)
+                            score = _calculate_activity_effort_score(df_segments, max_hr)
+                            efforts.append({'id': act['id'], 'score': score})
+                        except Exception: continue
+                top_efforts = sorted(efforts, key=lambda x: x['score'], reverse=True)[:5]
+                activity_ids_to_fetch = [e['id'] for e in top_efforts]
 
         streams = []
         for act_id in activity_ids_to_fetch:
-            try: streams.append(fetch_strava_api(token, f"activities/{act_id}/streams?keys=time,latlng,distance,altitude,heartrate&key_by_type=true"))
+            try: streams.append(fetch_strava_api(token, f"activities/{act_id}/streams?keys=time,latlng,distance,altitude,heartrate,velocity_smooth,cadence&key_by_type=true"))
             except HTTPException as e:
                 if e.status_code == 404: print(f"Avertissement: Activité {act_id} ignorée (404).")
                 else: raise
@@ -108,7 +120,6 @@ async def predict_race_plan_endpoint(
     token = authorization.split(" ")[1]
     try:
         params = PredictionInput(**json.loads(athlete_data_str))
-        
         athlete_data = fetch_strava_api(token, "athlete")
         params.weight = athlete_data.get('weight') or params.weight
         
