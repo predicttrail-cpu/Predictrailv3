@@ -17,11 +17,15 @@ class AthleteProfile(BaseModel):
     aerobic_endurance_speed: float
     fatigue_resistance: float
     pace_management: float
+    terrain_technique_score: float
+    cadence_efficiency: float
+    long_distance_endurance: float # NOUVEAU
     max_hr: Optional[int] = None
     resting_hr: Optional[int] = None
     runner_type: str
     radar_data: Dict[str, float]
     analysis_level: str
+    performance_model_coeffs: List[float] # NOUVEAU
 
 class AidStation(BaseModel):
     distance: float
@@ -55,4 +59,5 @@ class RacePlan(BaseModel):
     total_calories: float
     total_carbs: float
     total_hydration: float
+    weather_adjustment_percent: float
 
