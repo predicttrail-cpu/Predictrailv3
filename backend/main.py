@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 from typing import List, Dict, Any
 from models import PredictionInput, RacePlan, StravaActivity, AthleteProfile
 from core_logic import calculate_race_plan, get_and_sort_strava_activities, AthleteProfiler, GpxProcessor, _calculate_activity_effort_score
+from functools import lru_cache
+from cachetools import TTLCache, cached
 
 load_dotenv()
 STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
@@ -18,6 +20,9 @@ app = FastAPI(title="PredictTrail API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # --- Fonctions Utilitaires Strava ---
+strava_cache = TTLCache(maxsize=100, ttl=300)
+
+@cached(cache=strava_cache)
 def fetch_strava_api(token: str, endpoint: str) -> Any:
     url = f"https://www.strava.com/api/v3/{endpoint}"
     headers = {'Authorization': f'Bearer {token}'}
