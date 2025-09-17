@@ -13,4 +13,6 @@ cd backend
 # Start Gunicorn with Uvicorn workers
 # This is a production-ready command.
 echo "Starting Kairn server with Gunicorn..."
+echo "Starting Kairn server with Gunicorn..."
+gunicorn -w $WORKERS -k uvicorn.workers.UvicornWorker -b $BIND_ADDR main:app
 gunicorn -w $WORKERS -k uvicorn.workers.UvicornWorker -b $BIND_ADDR main:app
