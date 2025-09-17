@@ -2,13 +2,15 @@ import os
 import requests
 import gpxpy
 import json
+import zipfile
+import io
 from fastapi import FastAPI, Form, HTTPException, UploadFile, File, Request, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from typing import List, Dict, Any
 from models import PredictionInput, RacePlan, StravaActivity, AthleteProfile
-from core_logic import calculate_race_plan, get_and_sort_strava_activities, AthleteProfiler, GpxProcessor, _calculate_activity_effort_score
+from core_logic import calculate_race_plan, get_and_sort_strava_activities, AthleteProfiler, GpxProcessor, _calculate_activity_effort_score, process_strava_zip
 from functools import lru_cache
 from cachetools import TTLCache, cached
 
@@ -16,7 +18,7 @@ load_dotenv()
 STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
 STRAVA_CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
 
-app = FastAPI(title="PredictTrail API")
+app = FastAPI(title="Kairn API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # --- Fonctions Utilitaires Strava ---
@@ -115,26 +117,43 @@ async def parse_gpx_file(gpx_file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur d'analyse GPX: {e}")
 
+@app.post("/api/zip/process", response_model=AthleteProfile)
+async def process_zip_file(zip_file: UploadFile = File(...)):
+    try:
+        zip_content = await zip_file.read()
+        profile = process_strava_zip(io.BytesIO(zip_content))
+        return profile
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de traitement du ZIP: {e}")
+
 @app.post("/api/predict", response_model=RacePlan)
 async def predict_race_plan_endpoint(
     request: Request,
-    authorization: str = Header(...),
+    authorization: str = Header(None),
     athlete_data_str: str = Form(...),
     gpx_file: UploadFile = File(...)
 ):
-    token = authorization.split(" ")[1]
     try:
         params = PredictionInput(**json.loads(athlete_data_str))
-        athlete_data = fetch_strava_api(token, "athlete")
-        params.weight = athlete_data.get('weight') or params.weight
         
-        # Le profil est généré une seule fois au début de la prédiction
-        profile_request = Request(scope={"type": "http", "headers": request.headers.raw})
-        profile = await get_athlete_profile(profile_request, authorization)
-        
+        # Si un token Strava est fourni, on l'utilise pour enrichir les données
+        if authorization:
+            token = authorization.split(" ")[1]
+            athlete_data = fetch_strava_api(token, "athlete")
+            params.weight = athlete_data.get('weight') or params.weight
+            profile_request = Request(scope={"type": "http", "headers": request.headers.raw})
+            profile = await get_athlete_profile(profile_request, authorization)
+        else:
+            # Sinon, on utilise un profil généré (par ex. depuis le ZIP) ou un profil par défaut
+            # Pour l'instant, on se base sur ce qui est envoyé, en attendant une gestion de session
+            profile = AthleteProfile(**params.profile) if hasattr(params, 'profile') else None
+            if not profile:
+                 # Fallback sur un profil par défaut si rien n'est fourni
+                 profiler = AthleteProfiler([], params.weight)
+                 profile = profiler.get_default_profile()
+
+
         gpx = gpxpy.parse(await gpx_file.read())
-        
-        # La prédiction n'a pas besoin des activités, seulement du profil généré
         race_plan = calculate_race_plan(params, gpx, profile)
         return race_plan
     except Exception as e:

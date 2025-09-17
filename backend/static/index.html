@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PredictTrail - Plan de Course Avancé</title>
+    <title>Kairn - Plan de Course Avancé</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -99,20 +99,39 @@
     <main class="container mx-auto p-4 sm:p-6 lg:p-8">
         <!-- Header -->
         <header class="text-center my-6 md:my-8">
-            <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white">Predict<span
-                    class="text-orange-500">Trail</span></h1>
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white">Kairn</h1>
             <p class="text-md sm:text-lg text-gray-300 mt-2">Votre plan de course et de nutrition.</p>
         </header>
 
         <div class="card rounded-xl shadow-2xl p-4 sm:p-6 md:p-8 space-y-8 max-w-4xl mx-auto">
-                <!-- Connexion Strava -->
-                <div id="strava-connect-section">
-                    <h2 class="text-2xl font-semibold text-center mb-4">Connectez votre compte Strava</h2>
-                    <button id="strava-login-btn"
-                        class="w-full max-w-sm mx-auto strava-btn font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 text-lg">
-                        <span>Se connecter avec</span>
-                        <img src="images/strava_trans.png" alt="Logo Strava" class="h-5 w-auto">
-                    </button>
+                <!-- Options de Données -->
+                <div id="data-source-section">
+                    <h2 class="text-2xl font-semibold text-center mb-6">Comment souhaitez-vous charger vos données ?
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                        <!-- Option 1: Connexion Strava -->
+                        <div class="card p-6 rounded-lg text-center border border-gray-700 hover:border-orange-500 transition-all">
+                            <h3 class="text-xl font-semibold mb-3">Connexion Strava</h3>
+                            <p class="text-gray-400 mb-4 text-sm">Connexion sécurisée pour une analyse en temps réel de
+                                vos dernières activités.</p>
+                            <button id="strava-login-btn"
+                                class="w-full strava-btn font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2">
+                                <span>Se connecter avec</span>
+                                <img src="images/strava_trans.png" alt="Logo Strava" class="h-5 w-auto">
+                            </button>
+                        </div>
+                        <!-- Option 2: Charger un ZIP -->
+                        <div class="card p-6 rounded-lg text-center border border-gray-700 hover:border-orange-500 transition-all">
+                            <h3 class="text-xl font-semibold mb-3">Charger un export Strava (ZIP)</h3>
+                            <p class="text-gray-400 mb-4 text-sm">Analysez votre historique complet en chargeant
+                                l'archive de vos données Strava.</p>
+                            <input type="file" id="zip-upload-input" class="hidden" accept=".zip">
+                            <button id="zip-upload-btn"
+                                class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg">
+                                Charger un fichier .ZIP
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <!-- Contenu Principal de l'App -->
                 <div id="app-content" class="hidden space-y-8">
@@ -216,12 +235,14 @@
             </main>
         </div>
         <footer class="text-center py-8 mt-8 text-xs text-gray-500">
-            <p>PredictTrail v2.3.0</p>
+            <p>Kairn v2.3.0</p>
         </footer>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const stravaLoginBtn = document.getElementById('strava-login-btn');
+            const zipUploadBtn = document.getElementById('zip-upload-btn');
+            const zipUploadInput = document.getElementById('zip-upload-input');
             const appContent = document.getElementById('app-content');
             const predictionForm = document.getElementById('prediction-form');
             const gpxFileInput = document.getElementById('gpx_file');
@@ -247,12 +268,12 @@
                 if (code) {
                     history.pushState({}, '', window.location.pathname);
                     try {
-                        document.getElementById('strava-connect-section').innerHTML = `<div class="flex justify-center"><div class="loader w-8 h-8"></div></div>`;
+                        document.getElementById('data-source-section').innerHTML = `<div class="flex justify-center"><div class="loader w-8 h-8"></div></div>`;
                         const tokenData = await apiFetch('/api/auth/strava/token', { method: 'POST', body: new URLSearchParams({ code }) });
                         accessToken = tokenData.access_token;
                         athleteData = tokenData.athlete;
 
-                        document.getElementById('strava-connect-section').classList.add('hidden');
+                        document.getElementById('data-source-section').classList.add('hidden');
                         appContent.classList.remove('hidden');
 
                         displayWelcome(athleteData);
@@ -313,6 +334,11 @@
                         })).filter(s => !isNaN(s.distance))
                     };
 
+                    // Si le profil a été généré via ZIP, on l'inclut
+                    if (window.athleteProfile) {
+                        params.profile = window.athleteProfile;
+                    }
+
                     formData.append('athlete_data_str', JSON.stringify(params));
                     formData.append('gpx_file', gpxFileInput.files[0]);
 
@@ -331,6 +357,49 @@
                     const config = await apiFetch('/api/config');
                     window.location.href = `https://www.strava.com/oauth/authorize?client_id=${config.strava_client_id}&redirect_uri=${window.location.origin}&response_type=code&scope=read,activity:read_all`;
                 } catch (error) { showError(error, "Impossible de charger la configuration"); }
+            });
+
+            zipUploadBtn.addEventListener('click', () => zipUploadInput.click());
+
+            zipUploadInput.addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                document.getElementById('data-source-section').innerHTML = `<div class="flex justify-center"><div class="loader w-8 h-8"></div></div>`;
+
+                const formData = new FormData();
+                formData.append('zip_file', file);
+
+                try {
+                    const profile = await apiFetch('/api/zip/process', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    // Stocker le profil pour une utilisation ultérieure (prédiction)
+                    window.athleteProfile = profile;
+
+                    document.getElementById('data-source-section').classList.add('hidden');
+                    appContent.classList.remove('hidden');
+
+                    // Afficher un message de bienvenue générique
+                    displayWelcome({ firstname: "Athlète", profile_medium: "images/strava_trans.png", weight: 70 });
+
+                    if (profile.analysis_level === 'standard') {
+                        profileAnalysisWarning.classList.remove('hidden');
+                    }
+
+                    displayProfileSummary(profile);
+                    displayRadarChart(profile.radar_data);
+                    mainFormContent.classList.remove('hidden');
+                    initMap();
+
+                } catch (error) {
+                    showError(error, "Erreur lors du traitement du fichier ZIP");
+                    // Restore the original data source section if there's an error
+                    // This part would need to be more robust in a real app
+                    location.reload();
+                }
             });
 
             fetchActivitiesBtn.addEventListener('click', async () => {
