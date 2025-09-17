@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script starts the Gunicorn server for the PredictTrail application.
+# This script starts the Gunicorn server for the Kairn application.
 
 # Set the number of worker processes
 WORKERS=4
@@ -12,5 +12,5 @@ cd backend
 
 # Start Gunicorn with Uvicorn workers
 # This is a production-ready command.
-echo "Starting PredictTrail server with Gunicorn..."
+echo "Starting Kairn server with Gunicorn..."
 gunicorn -w $WORKERS -k uvicorn.workers.UvicornWorker -b $BIND_ADDR main:app
