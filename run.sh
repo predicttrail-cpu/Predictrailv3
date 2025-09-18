@@ -1,16 +1,9 @@
 #!/bin/bash
-# This script starts the Gunicorn server for the Kairn application.
+# This script starts the Uvicorn server for the Kairn application for local development.
 
-# Set the number of worker processes
-WORKERS=4
-
-# Set the host and port to bind to
-BIND_ADDR=0.0.0.0:8000
-
-# Change to the backend directory where the application and static files are located
+# Change to the backend directory where the application is located
 cd backend
 
-# Start Gunicorn with Uvicorn workers
-# This is a production-ready command.
-echo "Starting Kairn server with Gunicorn..."
-gunicorn -w $WORKERS -k uvicorn.workers.UvicornWorker -b $BIND_ADDR main:app
+# Start Uvicorn server with auto-reloading
+echo "Starting Kairn server with Uvicorn for local development..."
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
