@@ -2,17 +2,18 @@ import os
 import requests
 import gpxpy
 import json
-import zipfile
 import io
 from fastapi import FastAPI, Form, HTTPException, UploadFile, File, Request, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from typing import List, Dict, Any
-from models import PredictionInput, RacePlan, StravaActivity, AthleteProfile
-from core_logic import calculate_race_plan, get_and_sort_strava_activities, AthleteProfiler, GpxProcessor, _calculate_activity_effort_score, process_strava_zip
-from functools import lru_cache
-from cachetools import TTLCache, cached
+from typing import List, Any
+
+from backend.models import PredictionInput, RacePlan, StravaActivity, AthleteProfile
+from backend.logic.race_planner import calculate_race_plan
+from backend.logic.strava_utils import get_and_sort_strava_activities, process_strava_zip, fetch_strava_api
+from backend.logic.gpx_processor import GpxProcessor
+from backend.logic.athlete_profiler import AthleteProfiler, _calculate_activity_effort_score
 
 load_dotenv()
 STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
@@ -20,25 +21,6 @@ STRAVA_CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
 
 app = FastAPI(title="Kairn API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-
-# --- Fonctions Utilitaires Strava ---
-strava_cache = TTLCache(maxsize=100, ttl=300)
-
-@cached(cache=strava_cache)
-def fetch_strava_api(token: str, endpoint: str) -> Any:
-    url = f"https://www.strava.com/api/v3/{endpoint}"
-    headers = {'Authorization': f'Bearer {token}'}
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        status_code = e.response.status_code if e.response is not None else 500
-        detail = f"Erreur API Strava ({endpoint}): {e}"
-        if e.response is not None:
-            try: detail = f"Erreur API Strava ({endpoint}): {e.response.json()}"
-            except json.JSONDecodeError: pass
-        raise HTTPException(status_code=status_code, detail=detail)
 
 # --- ROUTES API ---
 @app.get("/api/config")
@@ -160,4 +142,3 @@ async def predict_race_plan_endpoint(
         raise HTTPException(status_code=500, detail=f"Erreur de prédiction: {e}")
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
